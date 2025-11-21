@@ -1,34 +1,32 @@
 // middleware.ts
-import { auth } from "./auth";
+import { NextRequest, NextResponse } from "next/server";
 
-export async function middleware(request: any) {
-    const session = await auth();
+export function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
     
-    const isLoggedIn = !!session?.user;
+    // Check for session cookie (works in Edge Runtime)
+    const sessionToken = 
+        request.cookies.get("authjs.session-token")?.value ||
+        request.cookies.get("__Secure-authjs.session-token")?.value;
     
-    // Protected routes - redirect to register if not logged in
-    const protectedRoutes = ["/", "/history", "/profile"];
-    const isProtected = protectedRoutes.some(route => 
-        pathname === route || pathname.startsWith(route + "/")
-    );
+    const isLoggedIn = !!sessionToken;
     
-    if (isProtected && !isLoggedIn) {
-        const url = request.nextUrl.clone();
-        url.pathname = "/register";
-        return Response.redirect(url);
+    // If not logged in and not on auth pages, redirect to register
+    if (!isLoggedIn && pathname !== "/login" && pathname !== "/register") {
+        return NextResponse.redirect(new URL("/register", request.url));
     }
     
     // Redirect logged-in users away from auth pages
     if (isLoggedIn && (pathname === "/login" || pathname === "/register")) {
-        const url = request.nextUrl.clone();
-        url.pathname = "/";
-        return Response.redirect(url);
+        return NextResponse.redirect(new URL("/", request.url));
     }
+    
+    return NextResponse.next();
 }
 
 export const config = {
     matcher: [
-        "/((?!api|_next/static|_next/image|.*\\.png$|favicon.ico).*)",
+        // Match all routes except API routes and static assets
+        "/((?!api|_next/static|_next/image|favicon.ico).*)",
     ],
 };
