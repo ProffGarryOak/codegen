@@ -1,9 +1,15 @@
 import { NextResponse } from 'next/server';
 import { model } from '@/lib/gemini';
 import { prisma } from '@/lib/prisma';
+import { auth } from '@/auth';
 
 export async function POST(request: Request) {
     try {
+        const session = await auth();
+        if (!session?.user?.email) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const { prompt, language_slug } = await request.json();
 
         if (!prompt || !language_slug) {
@@ -34,12 +40,22 @@ export async function POST(request: Request) {
         // Clean up code (remove markdown code blocks if present)
         code = code.replace(/^```[a-z]*\n/i, '').replace(/```$/, '').trim();
 
+        // Get user ID
+        const user = await prisma.user.findUnique({
+            where: { email: session.user.email }
+        });
+
+        if (!user) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
+
         // 3. Save to database
         const generationData = await prisma.generation.create({
             data: {
                 prompt,
                 code,
                 language_id: languageData.id,
+                user_id: user.id
             },
         });
 
@@ -47,10 +63,9 @@ export async function POST(request: Request) {
             ...generationData,
             id: generationData.id,
             created_at: generationData.created_at.toISOString(),
-            language_id: Number(generationData.language_id) // BigInt handling
+            language_id: Number(generationData.language_id)
         }, {
             status: 200,
-            // Handle BigInt serialization
             headers: { 'Content-Type': 'application/json' }
         });
     } catch (error) {
@@ -61,8 +76,3 @@ export async function POST(request: Request) {
         );
     }
 }
-
-// Helper to handle BigInt serialization if needed globally, but for now manual conversion in response
-// JSON.stringify doesn't support BigInt by default.
-// We can patch it or just convert in the response.
-// For this specific response, I converted language_id to Number.
