@@ -1,40 +1,44 @@
-import NextAuth from 'next-auth';
-import { authConfig } from './auth.config';
-import Credentials from 'next-auth/providers/credentials';
-import { z } from 'zod';
-import { prisma } from '@/lib/prisma';
-import bcrypt from 'bcryptjs';
+// auth.ts
+import NextAuth from "next-auth";
+import { authConfig } from "./auth.config";
+import Credentials from "next-auth/providers/credentials";
+import { z } from "zod";
+import { prisma } from "@/lib/prisma";
+import bcrypt from "bcryptjs";
 
 async function getUser(email: string) {
     try {
-        const user = await prisma.user.findUnique({ where: { email } });
-        return user;
-    } catch (error) {
-        console.error('Failed to fetch user:', error);
-        throw new Error('Failed to fetch user.');
+        return await prisma.user.findUnique({ where: { email } });
+    } catch (err) {
+        console.error("Failed to fetch user:", err);
+        throw new Error("Failed to fetch user.");
     }
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
     ...authConfig,
+
     providers: [
         Credentials({
             async authorize(credentials) {
-                const parsedCredentials = z
-                    .object({ email: z.string().email(), password: z.string().min(6) })
+                const parsed = z
+                    .object({
+                        email: z.string().email(),
+                        password: z.string().min(6),
+                    })
                     .safeParse(credentials);
 
-                if (parsedCredentials.success) {
-                    const { email, password } = parsedCredentials.data;
-                    const user = await getUser(email);
-                    if (!user) return null;
-                    const passwordsMatch = await bcrypt.compare(password, user.password);
+                if (!parsed.success) return null;
 
-                    if (passwordsMatch) return user;
-                }
+                const { email, password } = parsed.data;
 
-                console.log('Invalid credentials');
-                return null;
+                const user = await getUser(email);
+                if (!user) return null;
+
+                const match = await bcrypt.compare(password, user.password);
+                if (!match) return null;
+
+                return user;
             },
         }),
     ],

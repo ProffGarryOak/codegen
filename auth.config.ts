@@ -1,24 +1,39 @@
-import type { NextAuthConfig } from 'next-auth';
+// auth.config.ts
+import type { NextAuthConfig } from "next-auth";
 
 export const authConfig = {
     pages: {
-        signIn: '/login',
+        signIn: "/register",
     },
+
     callbacks: {
         authorized({ auth, request: { nextUrl } }) {
-            const isLoggedIn = !!auth?.user;
-            const isOnDashboard = nextUrl.pathname.startsWith('/history') || nextUrl.pathname.startsWith('/profile');
-            if (isOnDashboard) {
-                if (isLoggedIn) return true;
-                return false; // Redirect unauthenticated users to login page
-            } else if (isLoggedIn) {
-                // Redirect logged-in users away from login/register pages
-                if (nextUrl.pathname === '/login' || nextUrl.pathname === '/register') {
-                    return Response.redirect(new URL('/', nextUrl));
+            const loggedIn = !!auth?.user;
+
+            const isProtected =
+                nextUrl.pathname.startsWith("/history") ||
+                nextUrl.pathname.startsWith("/") ||
+                nextUrl.pathname.startsWith("/profile");
+
+            // 1️⃣ Not logged in → redirect to /register
+            if (isProtected && !loggedIn) {
+                return false; // middleware sends to signIn page
+            }
+
+            // 2️⃣ Logged-in users should not see /register or /login
+            if (loggedIn) {
+                if (
+                    nextUrl.pathname === "/login" ||
+                    nextUrl.pathname === "/register"
+                ) {
+                    return Response.redirect(new URL("/", nextUrl));
                 }
             }
+
             return true;
         },
     },
-    providers: [], // Add providers with an empty array for now
+
+    // ✅ REQUIRED by NextAuthConfig
+    providers: [],
 } satisfies NextAuthConfig;
